@@ -173,7 +173,14 @@ function breachPoint(breach, lane) {
 export function gateSpawnPoints(count, assaultIndex = 0, defenderCount = 1) {
     const open = openBreaches(assaultIndex, defenderCount);
     const points = [];
-    for (let index = 0; index < count; index += 1) {
+    // Nunca menos pontos que brechas abertas.
+    //
+    // O numero de pontos era fixo em cinco e as brechas eram percorridas em
+    // ciclo, entao a sexta -- a do sul, a ultima a abrir -- nunca recebia ponto
+    // nenhum: a muralha cedia na tela e ninguem entrava por ali. Passava
+    // despercebido porque os testes pediam pontos de sobra.
+    const total = Math.max(count, open.length);
+    for (let index = 0; index < total; index += 1) {
         const breach = open[index % open.length];
         if (!breach)
             continue;

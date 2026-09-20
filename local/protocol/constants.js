@@ -159,14 +159,23 @@ export const SOLDADO = {
  * tarde, poe invasores **atras** da linha, perto da fonte -- quem estava
  * curando vira alvo. Escalonadas, e nao simultaneas: duas paredes cedendo
  * juntas nao deixam ninguem decidir nada, so correr.
+ *
+ * Quem manda e o tempo; `minDefenders` so atrasa. Na primeira versao era o
+ * contrario, e o efeito foi que jogando sozinho nenhuma delas abria: a
+ * muralha nunca cedia e a missao inteira vinha do norte, como antes.
+ *
+ * Os flancos ficam a uns 750 px do portao, contra 250 a 450 das brechas do
+ * norte. Medido, isso **alivia** o portao em vez de castiga-lo -- o invasor
+ * gasta o dobro do tempo atravessando o patio. O que eles cobram e
+ * reposicionamento, nao dano: e a linha que precisa virar.
  */
 export const BREACHES = [
     { side: 'north', at: 0.22, fromAssault: 0, minDefenders: 1 },
     { side: 'north', at: 0.5, fromAssault: 0, minDefenders: 1 },
     { side: 'north', at: 0.78, fromAssault: 0, minDefenders: 1 },
-    { side: 'west', at: 0.38, fromAssault: 2, minDefenders: 2 },
-    { side: 'east', at: 0.38, fromAssault: 3, minDefenders: 3 },
-    { side: 'south', at: 0.35, fromAssault: 5, minDefenders: 4 },
+    { side: 'west', at: 0.38, fromAssault: 2, minDefenders: 1 },
+    { side: 'east', at: 0.38, fromAssault: 4, minDefenders: 2 },
+    { side: 'south', at: 0.35, fromAssault: 5, minDefenders: 3 },
 ];
 export const BREACH = {
     /** Largura do rombo desenhado na muralha. */

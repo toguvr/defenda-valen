@@ -432,7 +432,8 @@ export const CLASSES = {
         ability: {
             id: 'curativo',
             name: 'Curativo',
-            description: 'Cuida de si e do aliado mais proximo. Andar ou apanhar corta.',
+            description: 'Cuida de si e do aliado mais proximo. Andar ou apanhar corta. ' +
+                'A recarga e o tempo que ficou curando.',
             // Um clique inicia o cuidado; ele corre sozinho ate acabar ou ser
             // cortado. Nao e "mantida": segurar o botao nao muda nada.
             sustained: false,

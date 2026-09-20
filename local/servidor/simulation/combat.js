@@ -1,9 +1,34 @@
 import { COMBAT } from '../../protocol/index.js';
 import { isAlive } from '../domain/combatant.js';
-import { roundForWire } from '../domain/vector.js';
+import { clamp, roundForWire } from '../domain/vector.js';
 import { shieldReduction } from './ability.js';
 import { incomingDamageFactor, outgoingDamageFactor } from './special.js';
 import { upgradeFriendlyFireFactor } from './progression.js';
+/**
+ * Ponto do alvo que o golpe precisa alcancar.
+ *
+ * Alvo com `halfExtents` e uma caixa, e o golpe mede ate a borda dela.
+ *
+ * Tratar o portao como disco de raio 110 em volta do centro parece generoso e
+ * e o contrario: quem ataca a quina fica a 171 px do centro, contra 164 de
+ * alcance somado ao raio, e erra -- estando encostado na pedra. Era o que
+ * fazia os invasores das brechas laterais golpearem o portao a noite toda sem
+ * tirar um ponto de vida. VISUAL_BIBLE.md pede hitbox honesta: o que se ve e
+ * a caixa, entao e a caixa que decide.
+ */
+function strikePoint(from, target) {
+    const box = target.halfExtents;
+    if (!box)
+        return { point: target.position, radius: target.radius };
+    return {
+        point: {
+            x: clamp(from.x, target.position.x - box.x, target.position.x + box.x),
+            y: clamp(from.y, target.position.y - box.y, target.position.y + box.y),
+        },
+        // O ponto ja e a borda: somar raio contaria a caixa duas vezes.
+        radius: 0,
+    };
+}
 /**
  * O alvo esta dentro do arco do atacante?
  *
@@ -56,7 +81,8 @@ export function resolveAttack(attacker, candidates) {
         // permitiria "finalizar" um aliado caido em vez de socorre-lo.
         if (!isAlive(target))
             continue;
-        if (!isWithinArc(attacker.position, attacker.attackAim, target.position, target.radius, attacker.attack)) {
+        const reach = strikePoint(attacker.position, target);
+        if (!isWithinArc(attacker.position, attacker.attackAim, reach.point, reach.radius, attacker.attack)) {
             continue;
         }
         const friendly = target.team === attacker.team;

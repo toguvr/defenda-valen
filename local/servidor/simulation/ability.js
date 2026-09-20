@@ -127,9 +127,7 @@ export function stepHeal(players, elapsedMs) {
             healer.msSinceDamage < HEAL.interruptMs ||
             healer.movedByInput;
         if (cut) {
-            healer.healChannelMs = 0;
-            healer.abilityActive = false;
-            healer.healTargetId = null;
+            endHealChannel(healer);
             continue;
         }
         healer.healChannelMs = Math.max(0, healer.healChannelMs - elapsedMs);
@@ -148,6 +146,9 @@ export function stepHeal(players, elapsedMs) {
             touched = true;
         }
         healer.healTargetId = ally?.id ?? null;
+        // Canal cumprido ate o fim: cobra a recarga igual a qualquer outro fim.
+        if (healer.healChannelMs === 0)
+            endHealChannel(healer);
         if (!touched)
             continue;
         events.push({
@@ -162,6 +163,25 @@ export function stepHeal(players, elapsedMs) {
         });
     }
     return events;
+}
+/**
+ * Fecha o canal e cobra a recarga.
+ *
+ * A recarga e o tempo que ficou curando, nao um numero fixo.
+ *
+ * Antes nao havia recarga nenhuma: o Curativo era a unica habilidade que saia
+ * de `useAbility` antes de armar o cooldown, entao cortar e apertar de novo
+ * devolvia a cura na hora -- curar era infinito, bastava insistir. Um valor
+ * fixo tambem nao serve: quem foi cortado no primeiro segundo pagaria o mesmo
+ * que quem curou os quatro, e o corte ja e a punicao.
+ */
+function endHealChannel(healer) {
+    const used = Math.max(0, HEAL.durationMs - healer.healChannelMs);
+    const base = CLASSES[healer.classId].ability.cooldownMs * upgradeAbilityCooldownFactor(healer);
+    healer.abilityCooldownMs = Math.max(healer.abilityCooldownMs, base, used);
+    healer.healChannelMs = 0;
+    healer.abilityActive = false;
+    healer.healTargetId = null;
 }
 function nearestWoundedAlly(healer, players) {
     let best = null;
