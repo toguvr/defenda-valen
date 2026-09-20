@@ -118,6 +118,9 @@ export class MessageHandler {
             case 'set_ready':
                 this.handleSetReady(connection, message, now);
                 return;
+            case 'set_difficulty':
+                this.handleSetDifficulty(connection, message);
+                return;
             case 'input':
                 this.handleInput(connection, message);
                 return;
@@ -342,6 +345,29 @@ export class MessageHandler {
             this.broadcast(context.room, context.room.toMatchStarted());
             this.broadcastLobbyState(context.room);
         }
+    }
+    /**
+     * Dificuldade da missao.
+     *
+     * Duas checagens no servidor, e nao no client: quem pede precisa ser o
+     * anfitriao, e a sala precisa estar no lobby. Nao confiar no client e regra
+     * do CLAUDE.md, e aqui ela tem consequencia direta -- sem a segunda, daria
+     * para afrouxar a invasao no meio de uma missao que esta se perdendo.
+     */
+    handleSetDifficulty(connection, message) {
+        const context = this.requireRoom(connection);
+        if (!context)
+            return;
+        if (context.room.status !== 'lobby') {
+            connection.sendError(ERROR_CODE.ROOM_NOT_JOINABLE, 'a partida ja comecou');
+            return;
+        }
+        if (context.room.hostPlayerId !== context.playerId) {
+            connection.sendError(ERROR_CODE.NOT_ALLOWED, 'so o anfitriao escolhe a dificuldade');
+            return;
+        }
+        context.room.difficulty = message.difficulty;
+        this.broadcastLobbyState(context.room);
     }
     handleInput(connection, message) {
         const context = this.requireRoom(connection);

@@ -147,6 +147,34 @@ export const SOLDADO = {
         cooldownMs: 1500,
     },
 };
+export const DIFFICULTY_IDS = ['facil', 'normal', 'dificil'];
+export const DEFAULT_DIFFICULTY = 'facil';
+export const DIFFICULTIES = {
+    facil: {
+        id: 'facil',
+        name: 'Facil',
+        description: 'O patio raramente enche. E o equilibrio de sempre.',
+        threatFactor: 1,
+        concurrentFactor: 1,
+        heavyRelief: 0,
+    },
+    normal: {
+        id: 'normal',
+        name: 'Normal',
+        description: 'Mais invasores ao mesmo tempo, e Brutos antes do esperado.',
+        threatFactor: 1.35,
+        concurrentFactor: 1.25,
+        heavyRelief: 1,
+    },
+    dificil: {
+        id: 'dificil',
+        name: 'Dificil',
+        description: 'Patio cheio o tempo todo, com Capitao e Ariete desde cedo.',
+        threatFactor: 1.7,
+        concurrentFactor: 1.5,
+        heavyRelief: 2,
+    },
+};
 /**
  * Brechas na muralha, por onde a invasao entra.
  *
@@ -647,6 +675,8 @@ export const ERROR_CODE = {
     ROOM_NOT_FOUND: 'room_not_found',
     ROOM_FULL: 'room_full',
     ROOM_NOT_JOINABLE: 'room_not_joinable',
+    /** Pediu algo que so o anfitriao pode. */
+    NOT_ALLOWED: 'not_allowed',
     INVALID_RECONNECT_TOKEN: 'invalid_reconnect_token',
     INTERNAL_ERROR: 'internal_error',
 };

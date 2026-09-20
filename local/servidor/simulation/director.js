@@ -1,4 +1,4 @@
-import { ARIETE, ARQUEIRO, BRUTO, CAPITAO, DIRECTOR, LANCEIRO, SOLDADO, } from '../../protocol/index.js';
+import { ARIETE, ARQUEIRO, BRUTO, CAPITAO, DEFAULT_DIFFICULTY, DIFFICULTIES, DIRECTOR, LANCEIRO, SOLDADO, } from '../../protocol/index.js';
 export function createDirector() {
     return {
         // Comeca com orcamento para a leva de abertura: a missao nao comeca vazia.
@@ -50,11 +50,14 @@ export function effectiveDefenders(defenderCount) {
     return 1 + (defenderCount - 1) * DIRECTOR.additionalDefenderWeight;
 }
 /** Ameaca gerada por segundo agora, dado o time em campo. */
-export function threatPerSecond(phase, defenderCount) {
+export function threatPerSecond(phase, defenderCount, difficulty = DEFAULT_DIFFICULTY) {
     if (defenderCount <= 0)
         return 0;
     const escalation = 1 + phase.assaultIndex * DIRECTOR.escalationPerAssault;
-    const base = DIRECTOR.assaultThreatPerPlayer * effectiveDefenders(defenderCount) * escalation;
+    const base = DIRECTOR.assaultThreatPerPlayer *
+        effectiveDefenders(defenderCount) *
+        escalation *
+        DIFFICULTIES[difficulty].threatFactor;
     return phase.kind === 'assault' ? base : base * DIRECTOR.lullThreatFactor;
 }
 /**
@@ -65,9 +68,10 @@ export function threatPerSecond(phase, defenderCount) {
  * no risco do portao -- e tambem o que mais rapido torna a missao impossivel
  * para um jogador so, que nao tem com quem dividir a atencao.
  */
-export function concurrentLimit(defenderCount) {
+export function concurrentLimit(defenderCount, difficulty = DEFAULT_DIFFICULTY) {
     const extra = Math.max(0, effectiveDefenders(defenderCount) - 1);
-    return Math.min(DIRECTOR.maxConcurrentCap, DIRECTOR.baseConcurrent + Math.round(extra * DIRECTOR.maxConcurrentPerPlayer));
+    return Math.min(DIRECTOR.maxConcurrentCap, Math.floor((DIRECTOR.baseConcurrent + Math.round(extra * DIRECTOR.maxConcurrentPerPlayer)) *
+        DIFFICULTIES[difficulty].concurrentFactor));
 }
 /**
  * Avanca o Director e devolve quantos invasores devem entrar neste tick.
@@ -76,16 +80,17 @@ export function concurrentLimit(defenderCount) {
  * sai assim que houver espaco, o que faz a pressao "represar" quando o time
  * nao esta dando conta de limpar.
  */
-export function stepDirector(state, defenderCount, aliveInvaders, elapsedMs, random = Math.random) {
+export function stepDirector(state, defenderCount, aliveInvaders, elapsedMs, random = Math.random, difficulty = DEFAULT_DIFFICULTY) {
     state.elapsedMs += elapsedMs;
     state.phase = phaseAt(state.elapsedMs);
-    state.budget += threatPerSecond(state.phase, defenderCount) * (elapsedMs / 1000);
-    const limit = concurrentLimit(defenderCount);
+    state.budget += threatPerSecond(state.phase, defenderCount, difficulty) * (elapsedMs / 1000);
+    const limit = concurrentLimit(defenderCount, difficulty);
     let room = Math.max(0, limit - aliveInvaders);
     const spawns = [];
     while (room > 0) {
         // Sorteia so quando nao ha compromisso pendente.
-        const kind = state.pendingKind ?? pickEnemyKind(state.phase.assaultIndex, random(), defenderCount);
+        const kind = state.pendingKind ??
+            pickEnemyKind(state.phase.assaultIndex, random(), defenderCount, difficulty);
         state.pendingKind = kind;
         const cost = threatCostOf(kind);
         if (state.budget < cost)
@@ -125,15 +130,18 @@ const EMPTY_COMPOSITION = {
  *
  * Os tipos que exigem coordenacao so entram quando ha time para coordenar.
  */
-export function compositionFor(assaultIndex, defenderCount = Number.POSITIVE_INFINITY) {
+export function compositionFor(assaultIndex, defenderCount = Number.POSITIVE_INFINITY, difficulty = DEFAULT_DIFFICULTY) {
     let current = { ...EMPTY_COMPOSITION };
     for (const entry of DIRECTOR.composition) {
         if (assaultIndex >= entry.fromAssault)
             current = { ...entry.weights };
     }
     for (const [kind, minimum] of Object.entries(DIRECTOR.minDefendersFor)) {
-        if (defenderCount < minimum)
+        // A dificuldade desconta a exigencia: no dificil, um time pequeno ja
+        // encara Bruto e Capitao. Muda a composicao, nao os atributos deles.
+        if (defenderCount < Math.max(1, minimum - DIFFICULTIES[difficulty].heavyRelief)) {
             current[kind] = 0;
+        }
     }
     return current;
 }
@@ -143,8 +151,8 @@ export function compositionFor(assaultIndex, defenderCount = Number.POSITIVE_INF
  * Sorteio, e nao rodizio fixo, para que o time nao decore a ordem -- CLAUDE.md
  * pede pressao e eventos, nao padrao memorizavel.
  */
-export function pickEnemyKind(assaultIndex, random, defenderCount = Number.POSITIVE_INFINITY) {
-    const weights = compositionFor(assaultIndex, defenderCount);
+export function pickEnemyKind(assaultIndex, random, defenderCount = Number.POSITIVE_INFINITY, difficulty = DEFAULT_DIFFICULTY) {
+    const weights = compositionFor(assaultIndex, defenderCount, difficulty);
     const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
     if (total <= 0)
         return 'soldado';

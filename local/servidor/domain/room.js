@@ -1,4 +1,4 @@
-import { ARENA, CACADA, CLASSES, COMBAT, ZONE, STRUCTURE, BARRICADA, INPUT, PLAYER, DIRECTOR, ROOM, SIMULATION_TICK_MS, } from '../../protocol/index.js';
+import { ARENA, CACADA, CLASSES, DEFAULT_DIFFICULTY, COMBAT, ZONE, STRUCTURE, BARRICADA, INPUT, PLAYER, DIRECTOR, ROOM, SIMULATION_TICK_MS, } from '../../protocol/index.js';
 import { applyClass, createPlayerState, isReconnectWindowExpired, resetCombat, spawnPointForSlot, } from './player.js';
 import { positionForWire, roundForWire, seededStream } from './vector.js';
 import { stepPlayer } from '../simulation/movement.js';
@@ -36,6 +36,14 @@ export class Room {
     createdAt;
     status = 'lobby';
     hostPlayerId = null;
+    /**
+     * Dificuldade escolhida no lobby, pelo anfitriao.
+     *
+     * Vive na sala e nao no jogador: a missao e uma so, e o time inteiro joga a
+     * mesma. Fica travada quando a partida comeca -- mudar a pressao no meio da
+     * briga seria mudar a regra durante a jogada.
+     */
+    difficulty = DEFAULT_DIFFICULTY;
     startedAt = null;
     tick = 0;
     players = new Map();
@@ -335,7 +343,7 @@ export class Room {
         // O Director decide a pressao antes de tudo: quem entra agora ja age
         // neste tick.
         const connected = players.filter((player) => player.connected).length;
-        this.spawnInvaders(stepDirector(this.director, connected, this.listEnemies().filter((enemy) => enemy.combatState !== 'incapacitated').length, SIMULATION_TICK_MS, this.random), connected);
+        this.spawnInvaders(stepDirector(this.director, connected, this.listEnemies().filter((enemy) => enemy.combatState !== 'incapacitated').length, SIMULATION_TICK_MS, this.random, this.difficulty), connected);
         // Quem esta sob o Estandarte e decidido antes do combate: a reducao de
         // dano tem que valer para os golpes deste mesmo tick.
         stepBanners(players, this.structures);
@@ -731,6 +739,7 @@ export class Room {
             roomCode: this.code,
             status: this.status,
             hostPlayerId: this.hostPlayerId,
+            difficulty: this.difficulty,
             maxPlayers: ROOM.maxPlayers,
             players: this.listPlayers().map((player) => {
                 return {

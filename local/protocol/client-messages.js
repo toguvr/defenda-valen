@@ -1,5 +1,5 @@
 import { z } from '../zod/index.js';
-import { LIMITS, PLAYER, PROTOCOL_VERSION, ROOM } from './constants.js';
+import { DIFFICULTY_IDS, LIMITS, PLAYER, PROTOCOL_VERSION, ROOM } from './constants.js';
 import { CLASS_IDS } from './classes.js';
 /**
  * Schemas das mensagens client -> server.
@@ -65,6 +65,17 @@ export const selectClassSchema = z.object({
 export const setReadySchema = z.object({
     type: z.literal('set_ready'),
     ready: z.boolean(),
+});
+/**
+ * Dificuldade da missao, escolhida no lobby.
+ *
+ * So o anfitriao muda, e so antes de comecar: a missao e uma so e o time
+ * inteiro joga a mesma. O servidor confere as duas coisas -- o client nao
+ * decide nada.
+ */
+export const setDifficultySchema = z.object({
+    type: z.literal('set_difficulty'),
+    difficulty: z.enum(DIFFICULTY_IDS),
 });
 export const inputSchema = z.object({
     type: z.literal('input'),
@@ -135,6 +146,7 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
     joinRoomSchema,
     selectClassSchema,
     setReadySchema,
+    setDifficultySchema,
     inputSchema,
     basicAttackSchema,
     useAbilitySchema,
