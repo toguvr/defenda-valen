@@ -486,6 +486,15 @@ export const CLASSES = {
      * Besta: lenta, forte, com recarga explicita.
      *
      * O tempo de recarga e a identidade -- errar custa caro, acertar resolve.
+     *
+     * Ja foi 40 de dano a 520 de alcance, e em playtest soou forte demais. A
+     * medicao apontou o motivo, que nao era o dano por segundo: 20,5, o segundo
+     * mais baixo das oito classes. Era **dano sem risco** -- o invasor que
+     * alcanca mais longe e o Arqueiro, com 400, entao a besta acertava de 120 px
+     * alem de qualquer resposta. De quebra, passava por cima do Arqueiro aliado,
+     * cuja identidade no CLAUDE.md e justamente a ameaca a distancia.
+     *
+     * Agora o alcance fica abaixo dos dois: atirar exige entrar sob tiro.
      */
     cacador: {
         id: 'cacador',
@@ -495,15 +504,15 @@ export const CLASSES = {
         speed: 212,
         attackKind: 'projectile',
         attack: {
-            damage: 40,
-            range: 520,
+            damage: 34,
+            range: 420,
             arcDegrees: 6,
             windupMs: 220,
             /** Recarga visivel: o Cacador fica exposto depois de atirar. */
             recoveryMs: 520,
             cooldownMs: 1950,
         },
-        projectile: { speed: 820, maxRange: 520, radius: 5, splashRadius: 0 },
+        projectile: { speed: 820, maxRange: 420, radius: 5, splashRadius: 0 },
         ability: {
             id: 'armadilha',
             name: 'Armadilha',
