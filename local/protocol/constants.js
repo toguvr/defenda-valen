@@ -267,6 +267,25 @@ export const GATE = {
  */
 export const INVADER_THREAT_RANGE = 100;
 /**
+ * Invasores que cacam gente, e nao o portao.
+ *
+ * Existe porque subir o alcance de todo mundo nao funciona: medido a 280, a
+ * invasao inteira convergia nos herois, o portao terminava a missao em 99% e
+ * o time morria aos 60 segundos. Deixava de ser a missao de defender o
+ * portao e virava sobreviver a um cerco.
+ *
+ * Por tipo, muda de figura. Lanceiro e Capitao passam a vir atras de quem
+ * defende, de longe; Soldado, Bruto e Ariete continuam so querendo a porta.
+ * Ai as duas ameacas nao podem ser respondidas do mesmo jeito nem do mesmo
+ * lugar, que e o que tira o time de cima do portao.
+ */
+export const HUNTER_THREAT_RANGE = {
+    /** Lanceiro: incomoda de perto, nao atravessa o patio atras de alguem. */
+    lanceiro: 210,
+    /** Capitao: vem buscar. E o alvo prioritario, e cobra ser ignorado. */
+    capitao: 340,
+};
+/**
  * Lanceiro: alcance maior, guarda mais fechada.
  *
  * A lanca denuncia o alcance -- e o inimigo que pune aproximacao descuidada.
@@ -611,6 +630,41 @@ export const SPRITE_SHEET = {
  * decisao de posicao -- largar a linha por alguns segundos -- e nao consequencia
  * de esperar parado. O Suporte continua muito melhor: ele cura onde voce esta.
  */
+/**
+ * Suprimentos espalhados pelo mapa.
+ *
+ * Existem para dar ao patio uma razao de ser. Ate aqui a missao inteira
+ * acontecia em cima do portao: era o unico ponto que importava para os dois
+ * lados, e o resto do mapa era cenario por onde a invasao passava.
+ *
+ * A melhoria temporaria deixa de chegar sozinha por XP e passa a ficar numa
+ * caixa, longe. Alguem precisa largar a linha, atravessar, ficar parado
+ * abrindo e voltar -- e e o time que decide quem, e quando. CLAUDE.md pede
+ * cooperacao e posicionamento acima de volume de inimigos; isto e uma
+ * decisao de posicao com preco.
+ */
+export const SUPPLY = {
+    radius: 26,
+    /** Quanto tempo parado para abrir. Curto demais nao e escolha nenhuma. */
+    openMs: 2_200,
+    /** Distancia maxima para conseguir abrir. */
+    reach: 64,
+    /** Quantas ficam em campo ao mesmo tempo. */
+    concurrent: 2,
+    /** Espera antes de repor uma que foi aberta. */
+    respawnMs: 26_000,
+    /** Primeira leva, ja no comeco da missao. */
+    firstDelayMs: 12_000,
+    /**
+     * Distancia minima do portao.
+     *
+     * Sem isto o sorteio podia por a caixa colada no objetivo, e ai buscar
+     * suprimento nao custaria sair de lugar nenhum.
+     */
+    minGateDistance: 320,
+    /** Margem das muralhas, para a caixa nao nascer dentro da pedra. */
+    margin: 120,
+};
 export const FOUNTAIN = {
     x: 800,
     y: 640,

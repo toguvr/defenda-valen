@@ -1,4 +1,4 @@
-import { ARENA, ARQUEIRO, CAPITAO, INVADER_THREAT_RANGE } from '../../protocol/index.js';
+import { ARENA, ARQUEIRO, CAPITAO, INVADER_THREAT_RANGE, } from '../../protocol/index.js';
 import { isAlive } from '../domain/combatant.js';
 import { isDestroyed } from '../domain/gate.js';
 import { blockingStructure } from './collision.js';
@@ -61,7 +61,7 @@ function resolveTarget(enemy, defenders, gate, elapsedMs) {
     if (currentStillThreatens && enemy.retargetTimerMs > 0)
         return current;
     enemy.retargetTimerMs = enemy.kind === 'ariete' ? 1000 : 600;
-    const defender = preferPeople(enemy, defenders, INVADER_THREAT_RANGE);
+    const defender = preferPeople(enemy, defenders, threatRangeOf(enemy));
     if (defender !== null) {
         enemy.targetId = defender.id;
         return defender;
@@ -69,9 +69,13 @@ function resolveTarget(enemy, defenders, gate, elapsedMs) {
     enemy.targetId = null;
     return isDestroyed(gate) ? null : gate;
 }
+/** Ate onde este invasor se interessa por gente. */
+function threatRangeOf(enemy) {
+    return Math.max(INVADER_THREAT_RANGE, enemy.hunts ?? 0);
+}
 function withinThreatRange(enemy, body) {
     return (Math.hypot(body.position.x - enemy.position.x, body.position.y - enemy.position.y) <=
-        INVADER_THREAT_RANGE);
+        threatRangeOf(enemy));
 }
 /** Um passo de decisao e movimento de um invasor corpo a corpo. */
 export function stepMeleeInvader(enemy, defenders, gate, elapsedMs) {

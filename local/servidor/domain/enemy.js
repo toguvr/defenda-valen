@@ -1,4 +1,4 @@
-import { ARENA, ARIETE, BREACH, openBreaches, ARQUEIRO, BRUTO, CAPITAO, LANCEIRO, SOLDADO, } from '../../protocol/index.js';
+import { ARENA, ARIETE, BREACH, openBreaches, ARQUEIRO, BRUTO, CAPITAO, HUNTER_THREAT_RANGE, LANCEIRO, SOLDADO, } from '../../protocol/index.js';
 let nextEnemyNumber = 0;
 function baseEnemy(params) {
     nextEnemyNumber += 1;
@@ -15,6 +15,7 @@ function baseEnemy(params) {
         maxHealth: params.maxHealth,
         speed: params.speed,
         engageRange: params.engageRange,
+        hunts: params.hunts ?? 0,
         ranged: params.ranged,
         objectiveOnly: params.objectiveOnly ?? false,
         commands: params.commands ?? false,
@@ -52,6 +53,7 @@ export function createLanceiro(position) {
         maxHealth: LANCEIRO.maxHealth,
         speed: LANCEIRO.speed,
         engageRange: LANCEIRO.engageRange,
+        hunts: HUNTER_THREAT_RANGE.lanceiro,
         attack: LANCEIRO.attack,
         despawnDelayMs: LANCEIRO.despawnDelayMs,
         ranged: false,
@@ -99,6 +101,7 @@ export function createCapitao(position) {
         maxHealth: CAPITAO.maxHealth,
         speed: CAPITAO.speed,
         engageRange: CAPITAO.engageRange,
+        hunts: HUNTER_THREAT_RANGE.capitao,
         attack: CAPITAO.attack,
         despawnDelayMs: CAPITAO.despawnDelayMs,
         ranged: false,

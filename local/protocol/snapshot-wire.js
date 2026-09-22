@@ -81,6 +81,13 @@ export const WIRE_KEYS = {
         ax: 'aimX',
         ay: 'aimY',
     },
+    supply: {
+        i: 'id',
+        x: 'x',
+        y: 'y',
+        d: 'radius',
+        p: 'progress',
+    },
     companion: {
         i: 'id',
         w: 'ownerId',
@@ -224,6 +231,18 @@ export function encodeSnapshot(snapshot) {
             return out;
         });
     }
+    if (snapshot.supplies.length > 0) {
+        wire.U = snapshot.supplies.map((supply) => {
+            const out = {
+                i: supply.id,
+                x: supply.x,
+                y: supply.y,
+                d: supply.radius,
+            };
+            put(out, 'p', supply.progress);
+            return out;
+        });
+    }
     if (snapshot.companions.length > 0) {
         wire.C = snapshot.companions.map((companion) => {
             const out = {
@@ -336,6 +355,13 @@ export function decodeSnapshot(wire, enemyProfile, serverTime = 0) {
             operated: flag(structure.o),
             aimX: num(structure.ax),
             aimY: num(structure.ay),
+        })),
+        supplies: list(wire.U).map((supply) => ({
+            id: str(supply.i),
+            x: num(supply.x),
+            y: num(supply.y),
+            radius: num(supply.d),
+            progress: num(supply.p),
         })),
         companions: list(wire.C).map((companion) => ({
             id: str(companion.i),

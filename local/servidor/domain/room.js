@@ -1,4 +1,4 @@
-import { ARENA, CACADA, CLASSES, DEFAULT_DIFFICULTY, COMBAT, ZONE, STRUCTURE, BARRICADA, INPUT, PLAYER, DIRECTOR, ROOM, SIMULATION_TICK_MS, } from '../../protocol/index.js';
+import { ARENA, CACADA, SUPPLY, CLASSES, DEFAULT_DIFFICULTY, COMBAT, ZONE, STRUCTURE, BARRICADA, INPUT, PLAYER, DIRECTOR, ROOM, SIMULATION_TICK_MS, } from '../../protocol/index.js';
 import { applyClass, createPlayerState, isReconnectWindowExpired, resetCombat, spawnPointForSlot, } from './player.js';
 import { positionForWire, roundForWire, seededStream } from './vector.js';
 import { stepPlayer } from '../simulation/movement.js';
@@ -10,8 +10,9 @@ import { applyCommand, createArrowFor, stepDespawn, stepInvader } from '../simul
 import { ignite, isExpired, isFlammable, stepZones, zoneSpeedFactor, } from '../simulation/zone.js';
 import { hasRoomFor, isGone, toSnapshot as structureToSnapshot, } from './structure.js';
 import { resolveStructureCollisions } from '../simulation/collision.js';
+import { createSupply, pickSupplySpot, toSnapshot as supplyToSnapshot, } from './supply.js';
 import { stepBanners } from '../simulation/banner.js';
-import { addXp, createProgression, takeUpgrade, thresholdFor, xpFor, } from '../simulation/progression.js';
+import { addXp, createProgression, takeUpgrade, thresholdFor, xpFor, grantUpgradeLevel, } from '../simulation/progression.js';
 import { fireBolt, isOperating, stepSiegeUse, stepSiegeWeapons } from '../simulation/siege.js';
 import { createCompanion, hasLeft, resetCompanion, toSnapshot as companionToSnapshot, } from './companion.js';
 import { resolveCommand, stepCompanion } from '../simulation/companion-ai.js';
@@ -44,6 +45,10 @@ export class Room {
      * briga seria mudar a regra durante a jogada.
      */
     difficulty = DEFAULT_DIFFICULTY;
+    /** Caixas de suprimento em campo. */
+    supplies = [];
+    /** Quanto falta para a proxima caixa aparecer. */
+    supplyTimerMs = SUPPLY.firstDelayMs;
     startedAt = null;
     tick = 0;
     players = new Map();
@@ -301,6 +306,8 @@ export class Room {
         this.invadersDefeated = 0;
         this.progression = createProgression();
         this.upgradeOffers = [];
+        this.supplies.length = 0;
+        this.supplyTimerMs = SUPPLY.firstDelayMs;
         this.upgradesTaken = [];
         this.result = null;
         this.enemies.clear();
@@ -441,6 +448,7 @@ export class Room {
             if (hasLeft(companion))
                 this.companions.delete(companion.id);
         }
+        this.stepSupplies(players);
         stepRevives(players, SIMULATION_TICK_MS);
         stepRegen(players, SIMULATION_TICK_MS);
         resolveOverlaps(combatants);
@@ -449,6 +457,44 @@ export class Room {
         this.sweepDefeatedEnemies();
         this.evaluateEnd();
         return attacks;
+    }
+    /**
+     * Caixas de suprimento: reposicao e abertura.
+     *
+     * Abrir exige estar perto **e** com a interacao mantida. Mexer nao corta --
+     * andar para fora do alcance corta, o que e a mesma coisa dita pela posicao
+     * em vez de por uma regra a mais. O progresso e de quem comecou: dois
+     * jogadores na mesma caixa nao abrem em metade do tempo, senao buscar
+     * suprimento premiaria juntar o time em vez de espalha-lo.
+     */
+    stepSupplies(players) {
+        if (this.supplies.length < SUPPLY.concurrent) {
+            this.supplyTimerMs -= SIMULATION_TICK_MS;
+            if (this.supplyTimerMs <= 0) {
+                this.supplies.push(createSupply(pickSupplySpot(this.random, this.supplies.map((supply) => supply.position))));
+                this.supplyTimerMs = SUPPLY.respawnMs;
+            }
+        }
+        for (const supply of [...this.supplies]) {
+            const opener = players.find((player) => player.interacting &&
+                player.combatState !== 'incapacitated' &&
+                player.connected &&
+                (supply.claimedBy === null || supply.claimedBy === player.id) &&
+                Math.hypot(player.position.x - supply.position.x, player.position.y - supply.position.y) <= SUPPLY.reach);
+            if (!opener) {
+                supply.claimedBy = null;
+                // Nao zera: quem voltou continua de onde parou. Perder tudo por um
+                // passo em falso faria ninguem tentar no meio da briga.
+                supply.openedMs = Math.max(0, supply.openedMs - SIMULATION_TICK_MS);
+                continue;
+            }
+            supply.claimedBy = opener.id;
+            supply.openedMs += SIMULATION_TICK_MS;
+            if (supply.openedMs < SUPPLY.openMs)
+                continue;
+            this.supplies.splice(this.supplies.indexOf(supply), 1);
+            this.upgradeOffers.push(...grantUpgradeLevel(this.progression, this.listPlayers(), this.progressionRandom));
+        }
     }
     /**
      * Fecha a partida quando alguma condicao e atingida.
@@ -842,6 +888,7 @@ export class Room {
                 triggered: zone.triggered,
             })),
             structures: this.structures.map(structureToSnapshot),
+            supplies: this.supplies.map(supplyToSnapshot),
             companions: this.listCompanions().map(companionToSnapshot),
             mission: {
                 elapsedMs: Math.round(this.director.elapsedMs),

@@ -24,22 +24,36 @@ export function thresholdFor(level, defenders) {
  * Uma oferta por jogador de pe. Quem esta caido nao escolhe agora, mas nao
  * perde: a oferta fica pendente ate ele voltar -- ver `pendingOffers`.
  */
-export function addXp(progression, amount, players, random) {
+export function addXp(progression, amount, _players, _random) {
     if (amount <= 0)
         return [];
     progression.xp += amount;
+    return [];
+}
+/**
+ * Um degrau de melhoria, pago por um suprimento aberto.
+ *
+ * A melhoria deixou de chegar sozinha ao cruzar um limite de XP e passou a
+ * estar dentro de uma caixa, longe do portao. O XP continua sendo contado --
+ * serve ao fim de missao e a Companhia -- mas nao oferece mais nada por
+ * conta propria: o que oferece e alguem ter ido buscar.
+ *
+ * A oferta e do **time**, nao de quem abriu. CLAUDE.md pede XP compartilhado
+ * para nao haver disputa por abate; premiar so quem abre criaria a mesma
+ * disputa, agora por caixa, e o que se quer e o contrario -- que o time
+ * decida quem vai.
+ */
+export function grantUpgradeLevel(progression, players, random) {
+    if (progression.level >= PROGRESSION.levelThresholds.length)
+        return [];
+    progression.level += 1;
     const offers = [];
-    const defenders = players.filter((player) => player.connected).length;
-    while (progression.level < PROGRESSION.levelThresholds.length &&
-        progression.xp >= thresholdFor(progression.level, defenders)) {
-        progression.level += 1;
-        for (const player of players) {
-            const options = drawOptions(player, random);
-            if (options.length === 0)
-                continue;
-            player.pendingOffers.push({ level: progression.level, options });
-            offers.push({ playerId: player.id, level: progression.level, options });
-        }
+    for (const player of players) {
+        const options = drawOptions(player, random);
+        if (options.length === 0)
+            continue;
+        player.pendingOffers.push({ level: progression.level, options });
+        offers.push({ playerId: player.id, level: progression.level, options });
     }
     return offers;
 }
