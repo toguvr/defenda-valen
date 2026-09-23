@@ -5,4 +5,5 @@ export * from './company.js';
 export * from './snapshot-wire.js';
 export * from './client-messages.js';
 export * from './server-messages.js';
+export * from './equipment.js';
 //# sourceMappingURL=index.js.map

@@ -1,4 +1,4 @@
-import { ARENA, CLASSES, DEFAULT_CLASS, INPUT, GATE, PLAYER, ROOM, } from '../../protocol/index.js';
+import { ARENA, attackWith, CLASSES, DEFAULT_CLASS, UNARMED, INPUT, GATE, PLAYER, ROOM, } from '../../protocol/index.js';
 import { clamp } from './vector.js';
 export function createPlayerState(params) {
     return {
@@ -21,9 +21,11 @@ export function createPlayerState(params) {
         attackTimerMs: 0,
         attackCooldownMs: 0,
         attackAim: { x: 0, y: 1 },
-        attack: CLASSES[DEFAULT_CLASS].attack,
+        attack: UNARMED,
+        weaponId: null,
         interacting: false,
         wasInteracting: false,
+        interactPressed: false,
         operatingId: null,
         upgrades: [],
         pendingOffers: [],
@@ -95,7 +97,18 @@ export function applyClass(player, classId) {
     player.classId = classId;
     player.maxHealth = profile.maxHealth;
     player.health = profile.maxHealth;
-    player.attack = profile.attack;
+    applyWeapon(player, player.weaponId);
+}
+/**
+ * Poe (ou tira) a arma da mao e recalcula o golpe.
+ *
+ * O perfil de ataque vive num lugar so, derivado da classe mais o que esta
+ * na mao. Guardar uma copia e atualizar em varios lugares seria a receita
+ * para alguem ficar batendo com a arma que ja largou.
+ */
+export function applyWeapon(player, weaponId) {
+    player.weaponId = weaponId;
+    player.attack = attackWith(player.classId, weaponId);
 }
 /** Volta o personagem ao estado inicial de combate, no comeco da partida. */
 export function resetCombat(player) {
@@ -107,7 +120,8 @@ export function resetCombat(player) {
     player.interacting = false;
     player.wasInteracting = false;
     player.operatingId = null;
-    // Progressao de partida nao sobrevive a partida.
+    // Progressao de partida nao sobrevive a partida -- arma achada inclusive.
+    applyWeapon(player, null);
     player.upgrades = [];
     player.pendingOffers = [];
     player.msSinceDamage = Number.POSITIVE_INFINITY;

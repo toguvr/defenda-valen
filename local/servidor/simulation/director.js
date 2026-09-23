@@ -23,7 +23,12 @@ export function lullDurationMs(index) {
  * instante sem simular ate la.
  */
 export function phaseAt(elapsedMs) {
-    let cursor = 0;
+    // A preparacao conta como calmaria: o Director gasta o minimo, e o campo
+    // fica com o que couber no troco. Nao e tela de espera -- da para ser
+    // atacado, so nao se leva um assalto inteiro em cima.
+    if (elapsedMs < DIRECTOR.preparationMs)
+        return { kind: 'lull', assaultIndex: 0 };
+    let cursor = DIRECTOR.preparationMs;
     let index = 0;
     // Missoes sao curtas; este laco anda poucas dezenas de vezes no pior caso.
     for (;;) {

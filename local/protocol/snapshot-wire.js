@@ -42,6 +42,7 @@ export const WIRE_KEYS = {
         g: 'sheltered',
         o: 'operating',
         u: 'upgrades',
+        wp: 'weaponId',
     },
     enemy: {
         i: 'id',
@@ -80,6 +81,12 @@ export const WIRE_KEYS = {
         o: 'operated',
         ax: 'aimX',
         ay: 'aimY',
+    },
+    ground: {
+        i: 'id',
+        x: 'x',
+        y: 'y',
+        w: 'weaponId',
     },
     supply: {
         i: 'id',
@@ -147,6 +154,7 @@ export function encodeSnapshot(snapshot) {
             put(out, 'g', player.sheltered);
             put(out, 'o', player.operating);
             put(out, 'u', player.upgrades);
+            put(out, 'wp', player.weaponId);
             return out;
         }),
         G: {
@@ -243,6 +251,14 @@ export function encodeSnapshot(snapshot) {
             return out;
         });
     }
+    if (snapshot.ground.length > 0) {
+        wire.I = snapshot.ground.map((item) => ({
+            i: item.id,
+            x: item.x,
+            y: item.y,
+            w: item.weaponId,
+        }));
+    }
     if (snapshot.companions.length > 0) {
         wire.C = snapshot.companions.map((companion) => {
             const out = {
@@ -303,6 +319,7 @@ export function decodeSnapshot(wire, enemyProfile, serverTime = 0) {
             sheltered: flag(player.g),
             operating: flag(player.o),
             upgrades: (Array.isArray(player.u) ? player.u : []),
+            weaponId: str(player.wp),
             abilityCooldown: num(player.c),
         })),
         enemies: list(wire.E).map((enemy) => {
@@ -362,6 +379,12 @@ export function decodeSnapshot(wire, enemyProfile, serverTime = 0) {
             y: num(supply.y),
             radius: num(supply.d),
             progress: num(supply.p),
+        })),
+        ground: list(wire.I).map((item) => ({
+            id: str(item.i),
+            x: num(item.x),
+            y: num(item.y),
+            weaponId: str(item.w),
         })),
         companions: list(wire.C).map((companion) => ({
             id: str(companion.i),

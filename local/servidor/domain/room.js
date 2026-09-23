@@ -1,5 +1,5 @@
-import { ARENA, CACADA, SUPPLY, CLASSES, DEFAULT_DIFFICULTY, COMBAT, ZONE, STRUCTURE, BARRICADA, INPUT, PLAYER, DIRECTOR, ROOM, SIMULATION_TICK_MS, } from '../../protocol/index.js';
-import { applyClass, createPlayerState, isReconnectWindowExpired, resetCombat, spawnPointForSlot, } from './player.js';
+import { ARENA, CACADA, firesProjectile, REVIVE, WEAPONS, SUPPLY, CLASSES, DEFAULT_DIFFICULTY, COMBAT, ZONE, STRUCTURE, BARRICADA, INPUT, PLAYER, DIRECTOR, ROOM, SIMULATION_TICK_MS, } from '../../protocol/index.js';
+import { applyClass, applyWeapon, createPlayerState, isReconnectWindowExpired, resetCombat, spawnPointForSlot, } from './player.js';
 import { positionForWire, roundForWire, seededStream } from './vector.js';
 import { stepPlayer } from '../simulation/movement.js';
 import { beginAttack, canMove, stepCombat } from '../simulation/combat.js';
@@ -10,7 +10,8 @@ import { applyCommand, createArrowFor, stepDespawn, stepInvader } from '../simul
 import { ignite, isExpired, isFlammable, stepZones, zoneSpeedFactor, } from '../simulation/zone.js';
 import { hasRoomFor, isGone, toSnapshot as structureToSnapshot, } from './structure.js';
 import { resolveStructureCollisions } from '../simulation/collision.js';
-import { createSupply, pickSupplySpot, toSnapshot as supplyToSnapshot, } from './supply.js';
+import { createGroundItem, PICKUP_RANGE, toSnapshot as groundToSnapshot, } from './ground-item.js';
+import { createSupply, openingSpot, pickSupplySpot, toSnapshot as supplyToSnapshot, } from './supply.js';
 import { stepBanners } from '../simulation/banner.js';
 import { addXp, createProgression, takeUpgrade, thresholdFor, xpFor, grantUpgradeLevel, } from '../simulation/progression.js';
 import { fireBolt, isOperating, stepSiegeUse, stepSiegeWeapons } from '../simulation/siege.js';
@@ -47,6 +48,8 @@ export class Room {
     difficulty = DEFAULT_DIFFICULTY;
     /** Caixas de suprimento em campo. */
     supplies = [];
+    /** Armas largadas no chao. */
+    ground = [];
     /** Quanto falta para a proxima caixa aparecer. */
     supplyTimerMs = SUPPLY.firstDelayMs;
     startedAt = null;
@@ -315,6 +318,12 @@ export class Room {
         this.progression = createProgression();
         this.upgradeOffers = [];
         this.supplies.length = 0;
+        this.ground.length = 0;
+        // Arsenal: uma caixa por defensor, ja no chao quando a missao comeca.
+        const armados = Math.max(1, this.connectedPlayerCount);
+        for (let index = 0; index < armados; index += 1) {
+            this.supplies.push(createSupply(openingSpot(index, armados), true));
+        }
         this.supplyTimerMs = SUPPLY.firstDelayMs;
         this.upgradesTaken = [];
         this.result = null;
@@ -363,6 +372,12 @@ export class Room {
         // dano tem que valer para os golpes deste mesmo tick.
         stepBanners(players, this.structures);
         // Quem assume a arma decide antes do combate: o tiro sai neste tick.
+        // Borda de subida da interacao, uma vez por tick e para todos os que a
+        // consomem: balista e chao.
+        for (const player of players) {
+            player.interactPressed = player.interacting && !player.wasInteracting;
+            player.wasInteracting = player.interacting;
+        }
         stepSiegeUse(players, this.structures);
         stepSiegeWeapons(this.structures, players, SIMULATION_TICK_MS);
         // Decisao dos invasores antes do combate: mira e avanco entram no mesmo
@@ -394,7 +409,11 @@ export class Room {
             }
             const defender = this.players.get(combatant.id);
             const profile = defender ? CLASSES[defender.classId] : null;
-            if (defender && profile?.attackKind === 'projectile' && profile.projectile) {
+            // Maos vazias nao atiram: sem o arco na mao, o Arqueiro soca.
+            if (defender &&
+                profile?.attackKind === 'projectile' &&
+                profile.projectile &&
+                firesProjectile(defender.classId, defender.weaponId)) {
                 if (canSpawnProjectile(this.projectiles.length)) {
                     this.projectiles.push(createProjectile({
                         ownerId: defender.id,
@@ -459,6 +478,7 @@ export class Room {
                 this.companions.delete(companion.id);
         }
         this.stepSupplies(players);
+        this.stepGround(players);
         stepRevives(players, SIMULATION_TICK_MS);
         stepRegen(players, SIMULATION_TICK_MS);
         resolveOverlaps(combatants);
@@ -503,8 +523,93 @@ export class Room {
             if (supply.openedMs < SUPPLY.openMs)
                 continue;
             this.supplies.splice(this.supplies.indexOf(supply), 1);
-            this.upgradeOffers.push(...grantUpgradeLevel(this.progression, this.listPlayers(), this.progressionRandom));
+            this.rewardSupply(opener, supply.opening);
         }
+    }
+    /**
+     * O que sai de uma caixa aberta.
+     *
+     * Arma enquanto houver alguem de maos vazias; melhoria depois. A ordem nao
+     * e arbitraria: armar o time e a condicao para a missao ser jogavel, e uma
+     * melhoria de dano na mao de quem nao tem arma nao melhora nada.
+     *
+     * A arma sorteada e sempre de uma classe **presente na partida**. Achar a
+     * besta sem nenhum Cacador no time nao seria uma troca, seria lixo -- e o
+     * que se quer e que toda caixa interesse a alguem, so nem sempre a quem
+     * abriu.
+     */
+    rewardSupply(opener, opening) {
+        const players = this.listPlayers();
+        const missing = players.filter((player) => player.weaponId === null);
+        if (missing.length === 0) {
+            this.upgradeOffers.push(...grantUpgradeLevel(this.progression, players, this.progressionRandom));
+            return;
+        }
+        // No arsenal, a caixa contem a arma de quem esta mais perto dela.
+        //
+        // Sorteio puro faz o dono atravessar o patio inteiro, e medido isso
+        // custava a missao: seis jogadores perdiam o portao antes de se armarem.
+        // Perto, a troca acontece em dois passos e continua sendo troca.
+        const wanted = opening
+            ? missing.reduce((best, player) => Math.hypot(player.position.x - opener.position.x, player.position.y - opener.position.y) <
+                Math.hypot(best.position.x - opener.position.x, best.position.y - opener.position.y)
+                ? player
+                : best)
+            : missing[Math.floor(this.random() * missing.length) % missing.length];
+        if (!wanted)
+            return;
+        const weapon = WEAPONS[wanted.classId];
+        // Quem abriu fica com ela na mao se estiver desarmado; senao ela cai aos
+        // pes dele, e alguem precisa vir buscar.
+        if (opener.weaponId === null && opener.classId === wanted.classId) {
+            applyWeapon(opener, weapon.id);
+            return;
+        }
+        this.ground.push(createGroundItem(weapon.id, opener.position));
+    }
+    /**
+     * Interacao com o chao: pegar o que esta ali, ou largar o que esta na mao.
+     *
+     * Um verbo so, e contextual, porque CLAUDE.md pede poucos comandos. A
+     * ordem e a de urgencia: socorrer e abrir caixa ja tem prioridade antes
+     * disto; aqui, se ha arma ao alcance, pega; senao larga o que carrega.
+     */
+    stepGround(players) {
+        for (const item of this.ground) {
+            item.lockedMs = Math.max(0, item.lockedMs - SIMULATION_TICK_MS);
+        }
+        for (const player of players) {
+            // Borda de subida: segurar o botao nao fica pegando e largando em loop.
+            if (!player.interactPressed || player.combatState === 'incapacitated')
+                continue;
+            if (this.downedAllyNear(player) || this.supplyNear(player))
+                continue;
+            const index = this.ground.findIndex((item) => item.lockedMs <= 0 &&
+                Math.hypot(item.position.x - player.position.x, item.position.y - player.position.y) <= PICKUP_RANGE);
+            if (index >= 0) {
+                const item = this.ground[index];
+                const held = player.weaponId;
+                this.ground.splice(index, 1);
+                applyWeapon(player, item.weaponId);
+                // Troca: o que estava na mao fica no lugar do que foi pego.
+                if (held !== null)
+                    this.ground.push(createGroundItem(held, player.position));
+                continue;
+            }
+            if (player.weaponId !== null) {
+                this.ground.push(createGroundItem(player.weaponId, player.position));
+                applyWeapon(player, null);
+            }
+        }
+    }
+    /** Aliado caido ao alcance de socorro: tem prioridade sobre o chao. */
+    downedAllyNear(player) {
+        return this.listPlayers().some((other) => other.id !== player.id &&
+            other.combatState === 'incapacitated' &&
+            Math.hypot(other.position.x - player.position.x, other.position.y - player.position.y) <= REVIVE.range);
+    }
+    supplyNear(player) {
+        return this.supplies.some((supply) => Math.hypot(supply.position.x - player.position.x, supply.position.y - player.position.y) <= SUPPLY.reach);
     }
     /**
      * Fecha a partida quando alguma condicao e atingida.
@@ -886,6 +991,7 @@ export class Room {
                 sheltered: player.sheltered,
                 operating: player.operatingId !== null,
                 upgrades: [...player.upgrades],
+                weaponId: player.weaponId ?? '',
                 abilityCooldown: roundForWire(CLASSES[player.classId].ability.cooldownMs > 0
                     ? player.abilityCooldownMs / CLASSES[player.classId].ability.cooldownMs
                     : 0),
@@ -926,6 +1032,7 @@ export class Room {
             })),
             structures: this.structures.map(structureToSnapshot),
             supplies: this.supplies.map(supplyToSnapshot),
+            ground: this.ground.map(groundToSnapshot),
             companions: this.listCompanions().map(companionToSnapshot),
             mission: {
                 elapsedMs: Math.round(this.director.elapsedMs),

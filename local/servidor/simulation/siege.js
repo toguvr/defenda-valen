@@ -14,8 +14,7 @@ import { createProjectile } from './projectile.js';
 /** Assume ou larga a arma na borda de subida da interacao contextual. */
 export function stepSiegeUse(players, structures) {
     for (const player of players) {
-        const pressed = player.interacting && !player.wasInteracting;
-        player.wasInteracting = player.interacting;
+        const pressed = player.interactPressed;
         // Solta a arma sozinho quando cai, desconecta, ou a arma acaba.
         const current = structures.find((structure) => structure.id === player.operatingId);
         if (player.operatingId !== null &&

@@ -539,6 +539,17 @@ export const DIRECTOR = {
     escalationPerAssault: 0.18,
     /** Fracao da ameaca que continua entrando durante a calmaria. */
     lullThreatFactor: 0.12,
+    /**
+     * Silencio antes do primeiro assalto: o tempo de se armar.
+     *
+     * O time comeca de maos vazias e precisa abrir o arsenal, descobrir que
+     * achou a arma de outro e trocar. Medido sem esta folga, seis jogadores
+     * morriam entre 53 e 165 segundos sem nunca terem se armado -- a missao
+     * cobrava coordenacao antes de o time ter com que coordenar.
+     *
+     * Nao e tempo morto: e quando se decide quem fica com o que.
+     */
+    preparationMs: 25_000,
     firstAssaultMs: 30_000,
     /** Cada assalto dura um pouco mais que o anterior. */
     assaultGrowthMs: 5_000,
@@ -655,6 +666,18 @@ export const SUPPLY = {
     respawnMs: 26_000,
     /** Primeira leva, ja no comeco da missao. */
     firstDelayMs: 12_000,
+    /**
+     * Caixas do arsenal, postas no patio no instante em que a missao comeca.
+     *
+     * Uma por defensor. Sem elas o time passava os primeiros minutos de maos
+     * vazias esperando a caixa seguinte -- medido, quatro jogadores morriam aos
+     * 100 segundos sem nunca terem se armado. O comeco e para ser uma correria
+     * de vinte segundos, nao uma espera.
+     *
+     * Ficam perto de onde o time nasce e espalhadas entre si: achar a **sua**
+     * ainda depende de abrir e, quase sempre, de trocar com alguem.
+     */
+    openingRadius: 300,
     /**
      * Distancia minima do portao.
      *
