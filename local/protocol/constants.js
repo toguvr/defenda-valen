@@ -533,8 +533,13 @@ export const DIRECTOR = {
      * tempo socorrendo caido. Escalar linearmente fazia a missao ficar mais
      * dificil quanto maior o time -- o contrario do que um jogo cooperativo
      * deve entregar.
+     *
+     * Era 0.9, que e sublinear no papel e quase nada na pratica: o desconto de
+     * um jogador para seis era de 9%. Com 0.8 o time grande ganha folga de
+     * verdade, e e a segunda metade da correcao da curva -- a outra e
+     * `maxConcurrentPerPlayer`.
      */
-    additionalDefenderWeight: 0.9,
+    additionalDefenderWeight: 0.8,
     /** Quanto cada assalto seguinte e mais intenso que o anterior. */
     escalationPerAssault: 0.18,
     /** Fracao da ameaca que continua entrando durante a calmaria. */
@@ -576,8 +581,16 @@ export const DIRECTOR = {
      *
      * Este e o numero que mais mexe no dano que o portao toma: o que passa da
      * capacidade do time de interceptar vai direto bater no objetivo.
+     *
+     * Era 3.2, e 3.2 invertia a curva. Medido, a densidade **por cabeca** subia
+     * com o tamanho do time: 2,0 invasores para quem jogava sozinho contra 2,67
+     * para cada um num time de seis. Mais gente na muralha significava cada um
+     * mais cercado, que e o oposto do que um jogo cooperativo deve entregar --
+     * e o oposto do que o comentario acima ja dizia pretender. Com 2.4 a
+     * densidade fica plana em ~2,0 por defensor, e o time de seis deixou de
+     * terminar a missao pior que o de tres.
      */
-    maxConcurrentPerPlayer: 3.2,
+    maxConcurrentPerPlayer: 2.4,
     /** Teto absoluto, para a tela e a banda nao explodirem. */
     maxConcurrentCap: 20,
     /** Invasores que ja entram em campo no primeiro instante da missao. */
