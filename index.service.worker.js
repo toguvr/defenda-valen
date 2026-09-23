@@ -4,7 +4,7 @@
 // Incrementing CACHE_VERSION will kick off the install event and force
 // previously cached resources to be updated from the network.
 /** @type {string} */
-const CACHE_VERSION = '1790098168|2942736';
+const CACHE_VERSION = '1790128227|2143615';
 /** @type {string} */
 const CACHE_PREFIX = 'Defenda Valen-sw-cache-';
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;

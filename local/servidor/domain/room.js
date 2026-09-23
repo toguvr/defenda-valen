@@ -61,6 +61,13 @@ export class Room {
     companions = new Map();
     director = createDirector();
     invadersDefeated = 0;
+    /**
+     * Abates por jogador, para o placar de fim.
+     *
+     * Em mapa, e nao no `PlayerState`: quem cai da conexao no ultimo minuto
+     * continua no placar. O que ele fez aconteceu.
+     */
+    defeatsByPlayer = new Map();
     progression = createProgression();
     upgradeOffers = [];
     upgradesTaken = [];
@@ -304,6 +311,7 @@ export class Room {
         this.zoneEvents = [];
         this.director = createDirector();
         this.invadersDefeated = 0;
+        this.defeatsByPlayer.clear();
         this.progression = createProgression();
         this.upgradeOffers = [];
         this.supplies.length = 0;
@@ -406,13 +414,15 @@ export class Room {
                 continue;
             }
             attacks.push(attack);
-            this.countDefeated(attack.hits);
+            this.countDefeated(attack.hits, attack.attackerId);
         }
         this.lastImpacts = stepProjectiles(this.projectiles, targets, SIMULATION_TICK_MS);
         if (this.lastImpacts.length > 0) {
             const spent = new Set(this.lastImpacts.map((impact) => impact.projectile.id));
             this.projectiles = this.projectiles.filter((projectile) => !spent.has(projectile.id));
-            this.countDefeated(this.lastImpacts.flatMap((impact) => impact.hits));
+            for (const impact of this.lastImpacts) {
+                this.countDefeated(impact.hits, impact.projectile.ownerId);
+            }
         }
         for (const player of players) {
             if (!canMove(player) || player.rootedMs > 0 || isOperating(player)) {
@@ -430,7 +440,7 @@ export class Room {
         // Zonas agem antes do movimento: quem pisou na armadilha neste tick ja
         // fica preso neste tick.
         for (const trigger of stepZones(this.zones, targets, SIMULATION_TICK_MS)) {
-            this.countDefeated(trigger.hits);
+            this.countDefeated(trigger.hits, trigger.zone.ownerId);
             this.zoneEvents.push(trigger);
         }
         this.zones = this.zones.filter((zone) => !isExpired(zone));
@@ -522,16 +532,43 @@ export class Room {
             durationMs: now - (this.startedAt ?? now),
             missionDurationMs: DIRECTOR.missionDurationMs,
             invadersDefeated: this.invadersDefeated,
+            // Ordenado do maior para o menor: o placar ja chega pronto para desenhar.
+            scoreboard: this.listPlayers()
+                .map((player) => ({
+                playerId: player.id,
+                name: player.name,
+                classId: player.classId,
+                defeats: this.defeatsByPlayer.get(player.id) ?? 0,
+            }))
+                .sort((a, b) => b.defeats - a.defeats),
             gateHealth: this.gate.health,
             gateMaxHealth: this.gate.maxHealth,
         };
     }
-    countDefeated(hits) {
+    /**
+     * Quem leva o credito de um abate.
+     *
+     * O cao nao entra no placar por si: o abate dele e do dono. Ter uma linha
+     * "Cao de Augusto" ao lado da do proprio Augusto contaria a mesma coisa
+     * duas vezes e faria a classe parecer dois jogadores.
+     */
+    creditFor(attackerId) {
+        if (attackerId === null)
+            return null;
+        if (this.players.has(attackerId))
+            return attackerId;
+        return this.companions.get(attackerId)?.ownerId ?? null;
+    }
+    countDefeated(hits, attackerId = null) {
         let xp = 0;
+        const credit = this.creditFor(attackerId);
         for (const hit of hits) {
             if (!hit.incapacitated || hit.targetTeam !== 'invaders')
                 continue;
             this.invadersDefeated += 1;
+            if (credit !== null) {
+                this.defeatsByPlayer.set(credit, (this.defeatsByPlayer.get(credit) ?? 0) + 1);
+            }
             // XP do time, por tipo: o que ameaca mais vale mais.
             const kind = hit.targetId ? this.enemies.get(hit.targetId)?.kind : undefined;
             xp += kind ? xpFor(kind) : 0;
@@ -742,7 +779,7 @@ export class Room {
             player.abilityCooldownMs = 0;
             return true;
         }
-        this.countDefeated(outcome.hits);
+        this.countDefeated(outcome.hits, outcome.playerId);
         this.abilityEvents.push(outcome);
         return true;
     }
