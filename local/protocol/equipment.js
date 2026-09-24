@@ -1,13 +1,12 @@
-import { CLASSES } from './classes.js';
+import { CLASSES, CLASS_IDS } from './classes.js';
 /**
- * Armas achadas em campo.
+ * Armas tomadas do inimigo.
  *
- * O jogador entra desarmado. A arma da classe esta numa caixa em algum lugar
- * do patio, e pode nao ser ele quem a encontra -- e ai a unica saida e largar
- * no chao e avisar. CLAUDE.md poe cooperacao e comunicacao acima de volume de
- * inimigos; esta e a mecanica que cobra as duas.
+ * O jogador entra desarmado e arranca a primeira arma de quem veio derrubar o
+ * portao. Quem cai melhor armado deixa melhor arma: um Soldado larga ferro
+ * gasto, um Capitao larga o que um capitao carrega.
  *
- * Toda arma tem dono. Na mao errada ela rende quase nada, de proposito: se a
+ * Toda arma tem dono. Na mao errada rende quase nada, de proposito: se a
  * besta servisse ao Guerreiro nao haveria por que trocar, e sem troca a
  * mecanica seria so um atraso no comeco da partida.
  *
@@ -38,73 +37,103 @@ export const WRONG_HANDS = {
     /** Soma ao dano de maos vazias. Melhor que nada, longe de servir. */
     damageBonus: 3,
 };
-/**
- * Uma arma por classe.
- *
- * O perfil de ataque nao e repetido aqui: e o da propria classe. Uma segunda
- * tabela de numeros divergiria da primeira no primeiro ajuste de equilibrio.
- */
-export const WEAPONS = {
-    guerreiro: {
-        id: 'espada_de_guarda',
-        name: 'Espada de Guarda',
-        classId: 'guerreiro',
-        description: 'Larga e pesada. Feita para segurar passagem.',
-    },
-    arqueiro: {
-        id: 'arco_longo',
-        name: 'Arco Longo',
-        classId: 'arqueiro',
-        description: 'Alcance que atravessa o patio.',
-    },
-    alquimista: {
-        id: 'frascos',
-        name: 'Cinto de Frascos',
-        classId: 'alquimista',
-        description: 'Vidro, estopim e area.',
-    },
-    suporte: {
-        id: 'maca_e_ataduras',
-        name: 'Maca e Ataduras',
-        classId: 'suporte',
-        description: 'Golpeia pouco, cuida muito.',
-    },
-    engenheiro: {
-        id: 'martelo_de_obra',
-        name: 'Martelo de Obra',
-        classId: 'engenheiro',
-        description: 'Prego, madeira e cabeca de ferro.',
-    },
-    cacador: {
-        id: 'besta',
-        name: 'Besta',
-        classId: 'cacador',
-        description: 'Lenta, forte, com recarga visivel.',
-    },
-    mestre_caes: {
-        id: 'espada_curta',
-        name: 'Espada Curta',
-        classId: 'mestre_caes',
-        description: 'Leve, para quem luta ao lado do cao.',
-    },
-    barbaro: {
-        id: 'machado_de_duas_maos',
-        name: 'Machado de Duas Maos',
-        classId: 'barbaro',
-        description: 'Arco amplo. Perigoso para os dois lados.',
-    },
+export const TIER_DAMAGE = {
+    1: 0.7,
+    2: 1,
+    3: 1.28,
 };
-export const WEAPON_IDS = Object.values(WEAPONS).map((weapon) => weapon.id);
-export function weaponById(id) {
-    return Object.values(WEAPONS).find((weapon) => weapon.id === id) ?? null;
+export const TIER_NAMES = {
+    1: 'gasta',
+    2: 'boa',
+    3: 'de mestre',
+};
+/** Nome da familia de arma de cada classe, por degrau. */
+const FAMILIES = {
+    guerreiro: ['Espada Lascada', 'Espada de Guarda', 'Espada do Castelao'],
+    arqueiro: ['Arco Torto', 'Arco Longo', 'Arco de Tejo'],
+    alquimista: ['Frascos Trincados', 'Cinto de Frascos', 'Frascos Selados'],
+    suporte: ['Maca Amassada', 'Maca e Ataduras', 'Maca Bencida'],
+    engenheiro: ['Marreta Velha', 'Martelo de Obra', 'Martelo do Mestre'],
+    cacador: ['Besta Rachada', 'Besta', 'Besta de Aco'],
+    mestre_caes: ['Faca de Mato', 'Espada Curta', 'Lamina do Adestrador'],
+    barbaro: ['Machado Cego', 'Machado de Duas Maos', 'Machado Rompe-Escudo'],
+};
+/**
+ * Arquivo de arte de cada classe, em `assets/weapons/`.
+ *
+ * A silhueta pertence a **classe**, nao ao degrau: e ela que diz de quem e a
+ * arma no chao, e VISUAL_BIBLE.md pede que a classe se reconheca pela
+ * silhueta. Os tres degraus de uma classe dividem o mesmo desenho e se
+ * distinguem pelas marcas ao lado.
+ */
+export const WEAPON_SPRITES = {
+    guerreiro: 'espada_de_guarda',
+    arqueiro: 'arco_longo',
+    alquimista: 'frascos',
+    suporte: 'maca_e_ataduras',
+    engenheiro: 'martelo_de_obra',
+    cacador: 'besta',
+    mestre_caes: 'espada_curta',
+    barbaro: 'machado_de_duas_maos',
+};
+/** Os oito desenhos que a arte precisa cobrir. */
+export const WEAPON_SPRITE_IDS = Object.values(WEAPON_SPRITES);
+const DESCRIPTIONS = {
+    guerreiro: 'Larga e pesada. Feita para segurar passagem.',
+    arqueiro: 'Alcance que atravessa o patio.',
+    alquimista: 'Vidro, estopim e area.',
+    suporte: 'Golpeia pouco, cuida muito.',
+    engenheiro: 'Prego, madeira e cabeca de ferro.',
+    cacador: 'Lenta, forte, com recarga visivel.',
+    mestre_caes: 'Leve, para quem luta ao lado do cao.',
+    barbaro: 'Arco amplo. Perigoso para os dois lados.',
+};
+function buildWeapons() {
+    const out = [];
+    for (const classId of CLASS_IDS) {
+        const family = FAMILIES[classId];
+        for (const tier of [1, 2, 3]) {
+            out.push({
+                id: `${classId}_t${tier}`,
+                name: family[tier - 1],
+                classId,
+                tier,
+                description: DESCRIPTIONS[classId],
+            });
+        }
+    }
+    return out;
 }
+export const WEAPONS = buildWeapons();
+export function weaponById(id) {
+    return WEAPONS.find((weapon) => weapon.id === id) ?? null;
+}
+export function weaponFor(classId, tier) {
+    return WEAPONS.find((weapon) => weapon.classId === classId && weapon.tier === tier);
+}
+/**
+ * Quem cai armado deixa arma.
+ *
+ * O degrau vem do tipo do invasor, nao de sorteio: derrubar um Capitao tem
+ * que valer mais que limpar Soldados, e o jogador precisa **saber** disso
+ * olhando a tela antes de escolher o alvo. A chance existe para o chao nao
+ * virar um tapete de ferro numa missao de seis minutos.
+ */
+export const LOOT = {
+    soldado: { chance: 0.16, tier: 1 },
+    lanceiro: { chance: 0.2, tier: 1 },
+    arqueiro: { chance: 0.24, tier: 2 },
+    bruto: { chance: 0.42, tier: 2 },
+    capitao: { chance: 0.85, tier: 3 },
+    ariete: { chance: 1, tier: 3 },
+};
 /**
  * Perfil de ataque de alguem desta classe segurando esta arma.
  *
- * Sem arma, maos vazias. Com a arma certa, o perfil cheio da classe. Com a
- * errada, maos vazias com um empurraozinho -- o bastante para nao ser inutil
- * carregar ate encontrar o dono, longe do bastante para nao valer ficar com
- * ela.
+ * Sem arma, maos vazias. Com a arma certa, o perfil da classe com o dano do
+ * degrau. Com a errada, maos vazias com um empurraozinho -- o bastante para
+ * nao ser inutil carregar ate encontrar o dono, longe do bastante para nao
+ * valer ficar com ela.
  */
 export function attackWith(classId, weaponId) {
     if (weaponId === null)
@@ -112,15 +141,17 @@ export function attackWith(classId, weaponId) {
     const weapon = weaponById(weaponId);
     if (weapon === null)
         return UNARMED;
-    if (weapon.classId === classId)
-        return CLASSES[classId].attack;
-    return { ...UNARMED, damage: UNARMED.damage + WRONG_HANDS.damageBonus };
+    if (weapon.classId !== classId) {
+        return { ...UNARMED, damage: UNARMED.damage + WRONG_HANDS.damageBonus };
+    }
+    const base = CLASSES[classId].attack;
+    return { ...base, damage: Math.round(base.damage * TIER_DAMAGE[weapon.tier]) };
 }
 /** O projetil so existe quando a arma e a certa: maos vazias nao atiram. */
 export function firesProjectile(classId, weaponId) {
     if (weaponId === null)
         return false;
     const weapon = weaponById(weaponId);
-    return weapon !== null && weapon.classId === classId && CLASSES[classId].attackKind === 'projectile';
+    return (weapon !== null && weapon.classId === classId && CLASSES[classId].attackKind === 'projectile');
 }
 //# sourceMappingURL=equipment.js.map

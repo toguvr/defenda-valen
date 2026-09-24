@@ -1,4 +1,4 @@
-import { ARENA, CACADA, firesProjectile, REVIVE, WEAPONS, SUPPLY, CLASSES, DEFAULT_DIFFICULTY, COMBAT, ZONE, STRUCTURE, BARRICADA, INPUT, PLAYER, DIRECTOR, ROOM, SIMULATION_TICK_MS, } from '../../protocol/index.js';
+import { ARENA, CACADA, firesProjectile, LOOT, weaponById, weaponFor, REVIVE, CLASSES, DEFAULT_DIFFICULTY, COMBAT, ZONE, STRUCTURE, BARRICADA, INPUT, PLAYER, DIRECTOR, ROOM, SIMULATION_TICK_MS, } from '../../protocol/index.js';
 import { applyClass, applyWeapon, createPlayerState, isReconnectWindowExpired, resetCombat, spawnPointForSlot, } from './player.js';
 import { positionForWire, roundForWire, seededStream } from './vector.js';
 import { stepPlayer } from '../simulation/movement.js';
@@ -11,9 +11,8 @@ import { ignite, isExpired, isFlammable, stepZones, zoneSpeedFactor, } from '../
 import { hasRoomFor, isGone, toSnapshot as structureToSnapshot, } from './structure.js';
 import { resolveStructureCollisions } from '../simulation/collision.js';
 import { createGroundItem, PICKUP_RANGE, toSnapshot as groundToSnapshot, } from './ground-item.js';
-import { createSupply, openingSpot, pickSupplySpot, toSnapshot as supplyToSnapshot, } from './supply.js';
 import { stepBanners } from '../simulation/banner.js';
-import { addXp, createProgression, takeUpgrade, thresholdFor, xpFor, grantUpgradeLevel, } from '../simulation/progression.js';
+import { addXp, createProgression, takeUpgrade, thresholdFor, xpFor, } from '../simulation/progression.js';
 import { fireBolt, isOperating, stepSiegeUse, stepSiegeWeapons } from '../simulation/siege.js';
 import { createCompanion, hasLeft, resetCompanion, toSnapshot as companionToSnapshot, } from './companion.js';
 import { resolveCommand, stepCompanion } from '../simulation/companion-ai.js';
@@ -46,12 +45,8 @@ export class Room {
      * briga seria mudar a regra durante a jogada.
      */
     difficulty = DEFAULT_DIFFICULTY;
-    /** Caixas de suprimento em campo. */
-    supplies = [];
     /** Armas largadas no chao. */
     ground = [];
-    /** Quanto falta para a proxima caixa aparecer. */
-    supplyTimerMs = SUPPLY.firstDelayMs;
     startedAt = null;
     tick = 0;
     players = new Map();
@@ -317,14 +312,7 @@ export class Room {
         this.defeatsByPlayer.clear();
         this.progression = createProgression();
         this.upgradeOffers = [];
-        this.supplies.length = 0;
         this.ground.length = 0;
-        // Arsenal: uma caixa por defensor, ja no chao quando a missao comeca.
-        const armados = Math.max(1, this.connectedPlayerCount);
-        for (let index = 0; index < armados; index += 1) {
-            this.supplies.push(createSupply(openingSpot(index, armados), true));
-        }
-        this.supplyTimerMs = SUPPLY.firstDelayMs;
         this.upgradesTaken = [];
         this.result = null;
         this.enemies.clear();
@@ -477,7 +465,6 @@ export class Room {
             if (hasLeft(companion))
                 this.companions.delete(companion.id);
         }
-        this.stepSupplies(players);
         this.stepGround(players);
         stepRevives(players, SIMULATION_TICK_MS);
         stepRegen(players, SIMULATION_TICK_MS);
@@ -489,83 +476,45 @@ export class Room {
         return attacks;
     }
     /**
-     * Caixas de suprimento: reposicao e abertura.
+     * O que o invasor derrubado deixa no chao.
      *
-     * Abrir exige estar perto **e** com a interacao mantida. Mexer nao corta --
-     * andar para fora do alcance corta, o que e a mesma coisa dita pela posicao
-     * em vez de por uma regra a mais. O progresso e de quem comecou: dois
-     * jogadores na mesma caixa nao abrem em metade do tempo, senao buscar
-     * suprimento premiaria juntar o time em vez de espalha-lo.
+     * Quem cai melhor armado deixa melhor arma: o degrau sai do tipo do
+     * invasor, nao de sorteio. Derrubar um Capitao tem que valer mais que
+     * limpar Soldados, e isso precisa ser previsivel olhando a tela -- senao a
+     * escolha de alvo vira loteria em vez de decisao.
+     *
+     * Nada cai para quem nao ganharia nada com aquilo. Sem esse filtro o patio
+     * viraria um tapete de ferro inutil numa missao de seis minutos, e a arma
+     * que interessa se perderia no meio.
      */
-    stepSupplies(players) {
-        if (this.supplies.length < SUPPLY.concurrent) {
-            this.supplyTimerMs -= SIMULATION_TICK_MS;
-            if (this.supplyTimerMs <= 0) {
-                this.supplies.push(createSupply(pickSupplySpot(this.random, this.supplies.map((supply) => supply.position))));
-                this.supplyTimerMs = SUPPLY.respawnMs;
-            }
-        }
-        for (const supply of [...this.supplies]) {
-            const opener = players.find((player) => player.interacting &&
-                player.combatState !== 'incapacitated' &&
-                player.connected &&
-                (supply.claimedBy === null || supply.claimedBy === player.id) &&
-                Math.hypot(player.position.x - supply.position.x, player.position.y - supply.position.y) <= SUPPLY.reach);
-            if (!opener) {
-                supply.claimedBy = null;
-                // Nao zera: quem voltou continua de onde parou. Perder tudo por um
-                // passo em falso faria ninguem tentar no meio da briga.
-                supply.openedMs = Math.max(0, supply.openedMs - SIMULATION_TICK_MS);
-                continue;
-            }
-            supply.claimedBy = opener.id;
-            supply.openedMs += SIMULATION_TICK_MS;
-            if (supply.openedMs < SUPPLY.openMs)
-                continue;
-            this.supplies.splice(this.supplies.indexOf(supply), 1);
-            this.rewardSupply(opener, supply.opening);
-        }
-    }
-    /**
-     * O que sai de uma caixa aberta.
-     *
-     * Arma enquanto houver alguem de maos vazias; melhoria depois. A ordem nao
-     * e arbitraria: armar o time e a condicao para a missao ser jogavel, e uma
-     * melhoria de dano na mao de quem nao tem arma nao melhora nada.
-     *
-     * A arma sorteada e sempre de uma classe **presente na partida**. Achar a
-     * besta sem nenhum Cacador no time nao seria uma troca, seria lixo -- e o
-     * que se quer e que toda caixa interesse a alguem, so nem sempre a quem
-     * abriu.
-     */
-    rewardSupply(opener, opening) {
+    rollLoot(enemyId) {
+        const enemy = enemyId ? this.enemies.get(enemyId) : undefined;
+        if (!enemy)
+            return;
+        const drop = LOOT[enemy.kind];
         const players = this.listPlayers();
-        const missing = players.filter((player) => player.weaponId === null);
-        if (missing.length === 0) {
-            this.upgradeOffers.push(...grantUpgradeLevel(this.progression, players, this.progressionRandom));
-            return;
-        }
-        // No arsenal, a caixa contem a arma de quem esta mais perto dela.
+        // Enquanto alguem estiver de maos vazias, todo invasor deixa arma.
         //
-        // Sorteio puro faz o dono atravessar o patio inteiro, e medido isso
-        // custava a missao: seis jogadores perdiam o portao antes de se armarem.
-        // Perto, a troca acontece em dois passos e continua sendo troca.
-        const wanted = opening
-            ? missing.reduce((best, player) => Math.hypot(player.position.x - opener.position.x, player.position.y - opener.position.y) <
-                Math.hypot(best.position.x - opener.position.x, best.position.y - opener.position.y)
-                ? player
-                : best)
-            : missing[Math.floor(this.random() * missing.length) % missing.length];
-        if (!wanted)
+        // Sem isto o comeco e um beco: de maos vazias sao quinze golpes para
+        // derrubar um Soldado, e se ainda houver sorteio depois disso o time
+        // passa metade da missao socando. O primeiro ferro vem de quem veio
+        // derrubar o portao, e vem sempre.
+        const armando = players.some((player) => player.weaponId === null);
+        if (!armando && this.random() > drop.chance)
             return;
-        const weapon = WEAPONS[wanted.classId];
-        // Quem abriu fica com ela na mao se estiver desarmado; senao ela cai aos
-        // pes dele, e alguem precisa vir buscar.
-        if (opener.weaponId === null && opener.classId === wanted.classId) {
-            applyWeapon(opener, weapon.id);
+        const wanted = players.filter((player) => {
+            if (player.weaponId === null)
+                return true;
+            const held = weaponById(player.weaponId);
+            // Segurando a arma de outro, ou uma pior que a que caiu.
+            return held === null || held.classId !== player.classId || held.tier < drop.tier;
+        });
+        if (wanted.length === 0)
             return;
-        }
-        this.ground.push(createGroundItem(weapon.id, opener.position));
+        const lucky = wanted[Math.floor(this.random() * wanted.length) % wanted.length];
+        if (!lucky)
+            return;
+        this.ground.push(createGroundItem(weaponFor(lucky.classId, drop.tier).id, enemy.position));
     }
     /**
      * Interacao com o chao: pegar o que esta ali, ou largar o que esta na mao.
@@ -582,7 +531,7 @@ export class Room {
             // Borda de subida: segurar o botao nao fica pegando e largando em loop.
             if (!player.interactPressed || player.combatState === 'incapacitated')
                 continue;
-            if (this.downedAllyNear(player) || this.supplyNear(player))
+            if (this.downedAllyNear(player))
                 continue;
             const index = this.ground.findIndex((item) => item.lockedMs <= 0 &&
                 Math.hypot(item.position.x - player.position.x, item.position.y - player.position.y) <= PICKUP_RANGE);
@@ -607,9 +556,6 @@ export class Room {
         return this.listPlayers().some((other) => other.id !== player.id &&
             other.combatState === 'incapacitated' &&
             Math.hypot(other.position.x - player.position.x, other.position.y - player.position.y) <= REVIVE.range);
-    }
-    supplyNear(player) {
-        return this.supplies.some((supply) => Math.hypot(supply.position.x - player.position.x, supply.position.y - player.position.y) <= SUPPLY.reach);
     }
     /**
      * Fecha a partida quando alguma condicao e atingida.
@@ -674,6 +620,7 @@ export class Room {
             if (credit !== null) {
                 this.defeatsByPlayer.set(credit, (this.defeatsByPlayer.get(credit) ?? 0) + 1);
             }
+            this.rollLoot(hit.targetId);
             // XP do time, por tipo: o que ameaca mais vale mais.
             const kind = hit.targetId ? this.enemies.get(hit.targetId)?.kind : undefined;
             xp += kind ? xpFor(kind) : 0;
@@ -1031,7 +978,6 @@ export class Room {
                 triggered: zone.triggered,
             })),
             structures: this.structures.map(structureToSnapshot),
-            supplies: this.supplies.map(supplyToSnapshot),
             ground: this.ground.map(groundToSnapshot),
             companions: this.listCompanions().map(companionToSnapshot),
             mission: {
