@@ -32,6 +32,21 @@ export const UNARMED = {
     recoveryMs: 220,
     cooldownMs: 460,
 };
+/**
+ * Quanto tempo uma arma fica no chao.
+ *
+ * Medido: sem prazo, uma missao de seis jogadores terminava com 11 a 16 armas
+ * largadas. Cada uma com facho e anel, o patio virava um ferro-velho e a arma
+ * que importa se perdia no meio das que ninguem quis.
+ *
+ * Um minuto e folgado para atravessar o patio e buscar o que o amigo largou,
+ * e curto o bastante para o chao nao acumular a missao inteira. Os ultimos
+ * dez segundos piscam, para sumir nao ser surpresa.
+ */
+export const GROUND = {
+    lifetimeMs: 60_000,
+    fadeMs: 10_000,
+};
 /** O que uma arma rende para quem nao e dono dela. */
 export const WRONG_HANDS = {
     /** Soma ao dano de maos vazias. Melhor que nada, longe de servir. */

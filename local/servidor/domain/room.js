@@ -526,6 +526,13 @@ export class Room {
     stepGround(players) {
         for (const item of this.ground) {
             item.lockedMs = Math.max(0, item.lockedMs - SIMULATION_TICK_MS);
+            item.remainingMs -= SIMULATION_TICK_MS;
+        }
+        // Arma que ninguem quis sai de cena. Sem isto o patio acumulava a missao
+        // inteira e a que importava se perdia no meio.
+        for (let index = this.ground.length - 1; index >= 0; index -= 1) {
+            if (this.ground[index].remainingMs <= 0)
+                this.ground.splice(index, 1);
         }
         for (const player of players) {
             // Borda de subida: segurar o botao nao fica pegando e largando em loop.

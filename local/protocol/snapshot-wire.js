@@ -87,6 +87,7 @@ export const WIRE_KEYS = {
         x: 'x',
         y: 'y',
         w: 'weaponId',
+        f: 'fading',
     },
     companion: {
         i: 'id',
@@ -233,12 +234,18 @@ export function encodeSnapshot(snapshot) {
         });
     }
     if (snapshot.ground.length > 0) {
-        wire.I = snapshot.ground.map((item) => ({
-            i: item.id,
-            x: item.x,
-            y: item.y,
-            w: item.weaponId,
-        }));
+        wire.I = snapshot.ground.map((item) => {
+            const out = {
+                i: item.id,
+                x: item.x,
+                y: item.y,
+                w: item.weaponId,
+            };
+            // So vai no fio quando ja esta sumindo: e 1 quase o tempo todo.
+            if (item.fading < 1)
+                out.f = item.fading;
+            return out;
+        });
     }
     if (snapshot.companions.length > 0) {
         wire.C = snapshot.companions.map((companion) => {
@@ -359,6 +366,7 @@ export function decodeSnapshot(wire, enemyProfile, serverTime = 0) {
             x: num(item.x),
             y: num(item.y),
             weaponId: str(item.w),
+            fading: item.f === undefined ? 1 : num(item.f),
         })),
         companions: list(wire.C).map((companion) => ({
             id: str(companion.i),

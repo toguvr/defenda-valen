@@ -654,53 +654,6 @@ export const SPRITE_SHEET = {
  * decisao de posicao -- largar a linha por alguns segundos -- e nao consequencia
  * de esperar parado. O Suporte continua muito melhor: ele cura onde voce esta.
  */
-/**
- * Suprimentos espalhados pelo mapa.
- *
- * Existem para dar ao patio uma razao de ser. Ate aqui a missao inteira
- * acontecia em cima do portao: era o unico ponto que importava para os dois
- * lados, e o resto do mapa era cenario por onde a invasao passava.
- *
- * A melhoria temporaria deixa de chegar sozinha por XP e passa a ficar numa
- * caixa, longe. Alguem precisa largar a linha, atravessar, ficar parado
- * abrindo e voltar -- e e o time que decide quem, e quando. CLAUDE.md pede
- * cooperacao e posicionamento acima de volume de inimigos; isto e uma
- * decisao de posicao com preco.
- */
-export const SUPPLY = {
-    radius: 26,
-    /** Quanto tempo parado para abrir. Curto demais nao e escolha nenhuma. */
-    openMs: 2_200,
-    /** Distancia maxima para conseguir abrir. */
-    reach: 64,
-    /** Quantas ficam em campo ao mesmo tempo. */
-    concurrent: 2,
-    /** Espera antes de repor uma que foi aberta. */
-    respawnMs: 26_000,
-    /** Primeira leva, ja no comeco da missao. */
-    firstDelayMs: 12_000,
-    /**
-     * Caixas do arsenal, postas no patio no instante em que a missao comeca.
-     *
-     * Uma por defensor. Sem elas o time passava os primeiros minutos de maos
-     * vazias esperando a caixa seguinte -- medido, quatro jogadores morriam aos
-     * 100 segundos sem nunca terem se armado. O comeco e para ser uma correria
-     * de vinte segundos, nao uma espera.
-     *
-     * Ficam perto de onde o time nasce e espalhadas entre si: achar a **sua**
-     * ainda depende de abrir e, quase sempre, de trocar com alguem.
-     */
-    openingRadius: 300,
-    /**
-     * Distancia minima do portao.
-     *
-     * Sem isto o sorteio podia por a caixa colada no objetivo, e ai buscar
-     * suprimento nao custaria sair de lugar nenhum.
-     */
-    minGateDistance: 320,
-    /** Margem das muralhas, para a caixa nao nascer dentro da pedra. */
-    margin: 120,
-};
 export const FOUNTAIN = {
     x: 800,
     y: 640,
